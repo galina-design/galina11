@@ -109,11 +109,12 @@ elif page == "🚗 מחשבון נסיעות":
     if km_input > 0:
         total_pay, details = calculate_km_payment(km_input)
         
-        st.markdown(f"""
-        <div style="background-color:#f0f2f6; padding:20px; border-radius:10px; border-right: 5px solid #1a73e8;">
-            <h2 style="margin:0; color:#1a73e8;">סה\"כ לתשלום: ₪ {total_pay:,.2f}</h2>
-        </div>
-        """,unsafe_allow_html=True)
+      # הצגת התוצאה בדרך יפה ומובנית שלא גורמת לשגיאות
+st.subheader(f"💰 סה\"כ לתשלום: ₪ {total_pay:,.2f}")
+
+# אופציונלי: תיבת מידע כחולה ובולטת
+st.info(f"הסכום חושב עבור {km_input} קילומטרים לפי מדרגות התשלום המעודכנות.")
+
 
         st.write("#### 📋 פירוט החישוב לפי מדרגות:")
         st.table(pd.DataFrame(details))
