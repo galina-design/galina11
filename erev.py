@@ -113,7 +113,7 @@ elif page == "🚗 מחשבון נסיעות":
         <div style="background-color:#f0f2f6; padding:20px; border-radius:10px; border-right: 5px solid #1a73e8;">
             <h2 style="margin:0; color:#1a73e8;">סה\"כ לתשלום: ₪ {total_pay:,.2f}</h2>
         </div>
-        """, unsafe_content_type=True)
+        """,unsafe_allow_html=True)
 
         st.write("#### 📋 פירוט החישוב לפי מדרגות:")
         st.table(pd.DataFrame(details))
