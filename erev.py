@@ -1,33 +1,33 @@
 import streamlit as st
 import pandas as pd
-import io
+import datetime
 
-# הגדרות דף - עיצוב מודרני
+# הגדרות דף - תצוגה נקייה ומודרנית
 st.set_page_config(page_title="מחשבון סוקרים משולב", page_icon="📊", layout="centered")
 
-# --- פונקציות עזר לנסיעות ---
+# --- פונקציה לחישוב מדרגות נסיעה ---
 def calculate_km_payment(total_km):
-    # מדרגות לפי הטבלה ששלחת
     steps = [
-        (250, 1.5),   # מדרגה 1: 0-250
-        (250, 1.6),   # מדרגה 2: 250-500
-        (250, 1.7),   # מדרגה 3: 500-750
-        (250, 1.8),   # מדרגה 4: 750-1000
-        (float('inf'), 1.9) # מדרגה 5: מעל 1000
+        (250, 1.5),   # עד 250 ק"מ
+        (250, 1.6),   # 250-500 ק"מ
+        (250, 1.7),   # 500-750 ק"מ
+        (250, 1.8),   # 750-1000 ק"מ
+        (float('inf'), 1.9) # מעל 1000 ק"מ
     ]
-    
     payment = 0
     remaining = total_km
     details = []
-
     for limit, rate in steps:
         if remaining <= 0: break
         km_in_step = min(remaining, limit)
         step_pay = km_in_step * rate
         payment += step_pay
-        details.append({"מדרגת תשלום (₪)": f"{rate}", "ק\"מ בפועל": f"{km_in_step:.1f}", "תשלום במדרגה": f"₪ {step_pay:,.1f}"})
+        details.append({
+            "מדרגת תשלום (₪)": f"{rate}",
+            "ק\"מ בפועל": f"{km_in_step:.1f}",
+            "תשלום במדרגה": f"₪ {step_pay:,.1f}"
+        })
         remaining -= km_in_step
-        
     return payment, details
 
 # --- סרגל צד לניווט ---
@@ -41,22 +41,20 @@ st.sidebar.info("פותח עבור צוות הסוקרים 🐱")
 if page == "⏰ מחשבון שעות ערב":
     st.title("🕒 מחשבון שעות ערב (אקסל)")
     st.write("העלו את קובץ האקסל המקורי כדי לחשב זכאות לתוספת ערב.")
-    
     uploaded_file = st.file_uploader("בחר קובץ אקסל (.xlsx)", type=["xlsx", "xls"])
     
     if uploaded_file:
         try:
-            # לוגיקה מקורית (עיבוד אקסל)
             df = pd.read_excel(uploaded_file, header=8)
             df["תאריך"] = pd.to_datetime(df["תאריך"], errors="coerce")
             df["שעת התחלה"] = pd.to_datetime(df["שעת התחלה"], errors="coerce")
             df["שעת סיום"] = pd.to_datetime(df["שעת סיום"], errors="coerce")
+            df["שורה ראשית"] = df["תאריך"].notna()
             df["תאריך ממולא"] = df["תאריך"].ffill()
 
-            # סינון שורות עבודה (שורות המשך)
-            df_work = df[df["תאריך"].isna()].copy() # שורות המשך ללא תאריך במקור
-            df_work = df_work[df_work["שעת התחלה"].notna()].copy()
-            df_work["תאריך"] = df["תאריך ממולא"][df_work.index]
+            df_work = df[df["שורה ראשית"] == False].copy()
+            df_work = df_work[df_work["תאריך ממולא"].notna() & df_work["שעת התחלה"].notna()].copy()
+            df_work["תאריך"] = df_work["תאריך ממולא"]
 
             non_evening_stages = {110, 130, 132}
             df_work["משך"] = (df_work["שעת סיום"] - df_work["שעת התחלה"]).dt.total_seconds() / 3600
@@ -69,16 +67,12 @@ if page == "⏰ מחשבון שעות ערב":
                 return (end - max(start, cutoff)).total_seconds() / 3600
 
             df_work["שעות ערב"] = df_work.apply(evening_hours, axis=1)
-            
-            # חישוב יומי
             daily = df_work.groupby("תאריך")["שעות ערב"].sum()
             total_ev = df_work["שעות ערב"].sum()
             total_work = df_work["משך"].sum()
             percent = (total_ev / total_work) if total_work > 0 else 0
 
-            # הצגת תוצאות
-            st.success("✅ הקובץ עובד בהצלחה")
-            
+            st.success("✅ החישוב בוצע בהצלחה")
             col1, col2, col3 = st.columns(3)
             col1.metric("סה\"כ שעות", f"{total_work:.2f}")
             col2.metric("שעות ערב", f"{total_ev:.2f}")
@@ -86,40 +80,35 @@ if page == "⏰ מחשבון שעות ערב":
 
             st.markdown("### 📅 פירוט יומי")
             daily_df = pd.DataFrame(daily)
-            daily_df.columns = ["שעות ערב"]
             daily_df.index = daily_df.index.strftime('%d/%m/%Y')
             st.table(daily_df.style.format("{:.2f}"))
 
             if percent >= 0.5:
                 st.balloons()
-                st.success("🐱 **אתה זכאי לתוספת ערב החודש!**")
+                st.success("🐱 **זכאי לתוספת ערב החודש!**")
             else:
-                st.error("✖ **אינך זכאי לתוספת ערב החודש**")
-
+                st.warning("✖ **לא הגעת ל-50% שעות ערב**")
         except Exception as e:
             st.error(f"שגיאה בעיבוד הקובץ: {e}")
 
 # --- דף 2: מחשבון נסיעות ---
 elif page == "🚗 מחשבון נסיעות":
     st.title("🚗 מחשבון החזר נסיעות")
-    st.write("הזן את סה\"כ הקילומטרים שביצעת החודש לקבלת סכום ההחזר.")
+    st.write("הזן את סה\"כ הקילומטרים שביצעת החודש.")
 
     km_input = st.number_input("סה\"כ קילומטרים (ק\"מ):", min_value=0.0, step=1.0, value=0.0)
 
     if km_input > 0:
         total_pay, details = calculate_km_payment(km_input)
         
-      # הצגת התוצאה בדרך יפה ומובנית שלא גורמת לשגיאות
-st.subheader(f"💰 סה\"כ לתשלום: ₪ {total_pay:,.2f}")
-
-# אופציונלי: תיבת מידע כחולה ובולטת
-st.info(f"הסכום חושב עבור {km_input} קילומטרים לפי מדרגות התשלום המעודכנות.")
-
-
+        # תצוגה נקייה של הסכום לתשלום
+        st.subheader(f"💰 סה\"כ לתשלום: ₪ {total_pay:,.2f}")
+        st.info(f"החישוב בוצע עבור {km_input} קילומטרים.")
+        
         st.write("#### 📋 פירוט החישוב לפי מדרגות:")
         st.table(pd.DataFrame(details))
     else:
-        st.info("הזן כמות קילומטרים כדי לראות את החישוב.")
+        st.info("הזן כמות קילומטרים בשדה למעלה כדי לראות את החישוב.")
 
     with st.expander("ℹ️ הסבר על מדרגות התשלום"):
         st.write("""
